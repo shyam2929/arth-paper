@@ -1,0 +1,222 @@
+[
+ {
+  "setting": "Defensive dial: 25 stocks, overlay on",
+  "CAGR": 22.8,
+  "MaxDD": -30.1,
+  "mo_ge6": 25.2,
+  "mo_worst": -17.9,
+  "fee": 0.77,
+  "y18_21": 27.8,
+  "y22_26": 18.3,
+  "fresh22": 18.0
+ },
+ {
+  "setting": "Core dial: 15 stocks, overlay on",
+  "CAGR": 23.1,
+  "MaxDD": -34.7,
+  "mo_ge6": 27.2,
+  "mo_worst": -18.8,
+  "fee": 0.73,
+  "y18_21": 31.6,
+  "y22_26": 16.1,
+  "fresh22": 13.6
+ },
+ {
+  "setting": "Aggressive dial: 15 stocks, overlay off",
+  "CAGR": 28.5,
+  "MaxDD": -48.5,
+  "mo_ge6": 31.1,
+  "mo_worst": -23.6,
+  "fee": 0.69,
+  "y18_21": 35.5,
+  "y22_26": 22.5,
+  "fresh22": 20.1
+ },
+ {
+  "setting": "10 stocks, overlay off",
+  "CAGR": 28.3,
+  "MaxDD": -49.5,
+  "mo_ge6": 31.1,
+  "mo_worst": -22.5,
+  "fee": 0.71,
+  "y18_21": 40.9,
+  "y22_26": 18.3,
+  "fresh22": 19.2
+ },
+ {
+  "setting": "20 stocks, overlay off",
+  "CAGR": 25.3,
+  "MaxDD": -43.9,
+  "mo_ge6": 32.0,
+  "mo_worst": -25.4,
+  "fee": 0.7,
+  "y18_21": 29.5,
+  "y22_26": 21.5,
+  "fresh22": 20.8
+ },
+ {
+  "setting": "30 stocks, overlay off",
+  "CAGR": 25.2,
+  "MaxDD": -40.3,
+  "mo_ge6": 30.1,
+  "mo_worst": -24.5,
+  "fee": 0.69,
+  "y18_21": 28.2,
+  "y22_26": 22.4,
+  "fresh22": 22.9
+ },
+ {
+  "setting": "15 stocks, all cash when risk-off",
+  "CAGR": 16.7,
+  "MaxDD": -36.2,
+  "mo_ge6": 18.4,
+  "mo_worst": -19.0,
+  "fee": 0.72,
+  "y18_21": 26.2,
+  "y22_26": 9.0,
+  "fresh22": 7.9
+ },
+ {
+  "setting": "15 stocks, score = NMS only, overlay off",
+  "CAGR": 23.2,
+  "MaxDD": -47.4,
+  "mo_ge6": 29.1,
+  "mo_worst": -21.9,
+  "fee": 0.89,
+  "y18_21": 27.9,
+  "y22_26": 19.0,
+  "fresh22": 17.9
+ },
+ {
+  "setting": "15 stocks, score = 12-1 only, overlay off",
+  "CAGR": 30.4,
+  "MaxDD": -41.7,
+  "mo_ge6": 32.0,
+  "mo_worst": -21.4,
+  "fee": 0.72,
+  "y18_21": 31.3,
+  "y22_26": 29.3,
+  "fresh22": 29.7
+ },
+ {
+  "setting": "15 stocks, universe 250, overlay off",
+  "CAGR": 23.4,
+  "MaxDD": -45.8,
+  "mo_ge6": 32.0,
+  "mo_worst": -24.0,
+  "fee": 0.64,
+  "y18_21": 25.8,
+  "y22_26": 21.2,
+  "fresh22": 21.4
+ },
+ {
+  "setting": "15 stocks, universe 1000 (min Rs 2 Cr/day), overlay off",
+  "CAGR": 35.3,
+  "MaxDD": -42.8,
+  "mo_ge6": 36.9,
+  "mo_worst": -24.9,
+  "fee": 0.67,
+  "y18_21": 45.6,
+  "y22_26": 27.0,
+  "fresh22": 26.8
+ },
+ {
+  "setting": "15 stocks, weekly rebalance, overlay off",
+  "CAGR": 25.7,
+  "MaxDD": -49.4,
+  "mo_ge6": 34.0,
+  "mo_worst": -21.6,
+  "fee": 0.95,
+  "y18_21": 27.3,
+  "y22_26": 24.0,
+  "fresh22": 23.7
+ },
+ {
+  "setting": "15 stocks, inverse-vol weights, overlay off",
+  "CAGR": 29.2,
+  "MaxDD": -43.2,
+  "mo_ge6": 32.0,
+  "mo_worst": -21.4,
+  "fee": 0.7,
+  "y18_21": 34.0,
+  "y22_26": 24.9,
+  "fresh22": 22.1
+ },
+ {
+  "setting": "10 stocks, universe 1000, overlay off",
+  "CAGR": 37.9,
+  "MaxDD": -45.4,
+  "mo_ge6": 35.0,
+  "mo_worst": -22.7,
+  "fee": 0.72,
+  "y18_21": 57.5,
+  "y22_26": 23.2,
+  "fresh22": 22.2
+ },
+ {
+  "setting": "12-1, 10 stocks, universe 500",
+  "CAGR": 32.0,
+  "MaxDD": -48.2,
+  "mo_ge6": 33.0,
+  "mo_worst": -22.3,
+  "fee": 0.72,
+  "y18_21": 43.4,
+  "y22_26": 23.1,
+  "fresh22": 24.0
+ },
+ {
+  "setting": "12-1, 20 stocks, universe 500",
+  "CAGR": 27.4,
+  "MaxDD": -44.8,
+  "mo_ge6": 32.0,
+  "mo_worst": -24.2,
+  "fee": 0.75,
+  "y18_21": 28.8,
+  "y22_26": 25.8,
+  "fresh22": 25.6
+ },
+ {
+  "setting": "12-1, 10 stocks, universe 1000",
+  "CAGR": 33.8,
+  "MaxDD": -48.0,
+  "mo_ge6": 36.9,
+  "mo_worst": -23.7,
+  "fee": 0.73,
+  "y18_21": 51.8,
+  "y22_26": 20.2,
+  "fresh22": 20.1
+ },
+ {
+  "setting": "12-1, 15 stocks, universe 1000",
+  "CAGR": 37.5,
+  "MaxDD": -40.4,
+  "mo_ge6": 36.9,
+  "mo_worst": -21.1,
+  "fee": 0.7,
+  "y18_21": 43.4,
+  "y22_26": 32.5,
+  "fresh22": 33.2
+ },
+ {
+  "setting": "12-1, 20 stocks, universe 1000",
+  "CAGR": 32.7,
+  "MaxDD": -40.8,
+  "mo_ge6": 35.9,
+  "mo_worst": -24.5,
+  "fee": 0.71,
+  "y18_21": 35.4,
+  "y22_26": 30.1,
+  "fresh22": 30.1
+ },
+ {
+  "setting": "12-1, 15 stocks, universe 500, overlay on",
+  "CAGR": 24.0,
+  "MaxDD": -43.6,
+  "mo_ge6": 27.2,
+  "mo_worst": -20.2,
+  "fee": 0.77,
+  "y18_21": 26.6,
+  "y22_26": 21.5,
+  "fresh22": 21.8
+ }
+]

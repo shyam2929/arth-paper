@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the Arth paper desk after NSE publishes the day's files
+
+[Timer]
+# NSE's closing files normally appear by 18:30 IST; three tries per trading evening, all idempotent
+OnCalendar=Mon..Fri 19:15 Asia/Kolkata
+OnCalendar=Mon..Fri 21:00 Asia/Kolkata
+OnCalendar=Mon..Fri 23:15 Asia/Kolkata
+OnCalendar=Sat 10:00 Asia/Kolkata
+Persistent=true
+
+[Install]
+WantedBy=timers.target

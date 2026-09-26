@@ -1,0 +1,14 @@
+[Unit]
+Description=Arth paper desk: daily data update, paper session, report
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=arth
+WorkingDirectory=/opt/arth/app
+EnvironmentFile=-/etc/arth.env
+ExecStart=/opt/arth/venv/bin/python -m arth.paper daily
+# exit code 2 = NSE's file for today is not published yet; the timer tries again later tonight
+SuccessExitStatus=2
+TimeoutStartSec=3600

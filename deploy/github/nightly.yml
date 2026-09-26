@@ -1,0 +1,89 @@
+# Arth paper desk on GitHub Actions: runs the frozen engine every trading evening, saves the ledger back into
+# the repository (state/ledger.json) and publishes the dashboard to GitHub Pages. No secrets are used.
+name: Arth paper desk nightly
+
+on:
+  schedule:
+    - cron: "40 15 * * 1-6"   # 21:10 IST, Mon-Sat (NSE files are normally out by 20:30)
+    - cron: "40 17 * * 1-6"   # 23:10 IST retry; re-running is harmless (idempotent)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: arth-nightly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: First run only - unpack the uploaded code
+        run: |
+          if [ -f arth_repo.zip ]; then
+            rm -rf /tmp/unz && unzip -q arth_repo.zip -d /tmp/unz
+            rsync -a --exclude .github /tmp/unz/arth/ ./
+            git rm -q arth_repo.zip
+            git config user.name "arth-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -qm "Unpack the Arth code"
+            git push
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packages
+        run: pip install -q -r requirements.txt
+
+      - name: Restore cached NSE files
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: nse-raw-${{ github.run_id }}
+          restore-keys: nse-raw-
+
+      - name: Fetch NSE data (resumable, up to 4 passes)
+        run: |
+          for i in 1 2 3 4; do
+            python -m arth.ops.cloud fetch > fetch.log 2>&1 || true
+            cat fetch.log
+            if tail -1 fetch.log | grep -q '^FETCH_OK'; then break; fi
+            sleep 30
+          done
+
+      - name: Run the paper desk
+        run: |
+          python -m arth.ops.cloud nightly --ledger state/ledger.json --out out --full --runner "GitHub Actions nightly" | tee run.log
+          tail -1 run.log | grep -q '^RUN_OK'
+          cp out/state/ledger.json state/ledger.json
+          mkdir -p site && cp out/index.html site/index.html && cp out/state/ledger.json site/ledger.json
+          cat out/summary.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save the ledger
+        run: |
+          git config user.name "arth-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/ledger.json
+          if ! git diff --cached --quiet; then
+            git commit -qm "Paper ledger $(TZ=Asia/Kolkata date +%F)"
+            git push
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,40 @@
+{
+ "real_util0.5": {
+  "CAGR": 9.4,
+  "MaxDD": -23.3,
+  "median": 2.69,
+  "mean": 0.83,
+  "ge6": 0.0,
+  "worst": -9.3,
+  "stops": 18,
+  "n": 98
+ },
+ "real_util0.8": {
+  "CAGR": 11.4,
+  "MaxDD": -36.0,
+  "median": 4.07,
+  "mean": 1.08,
+  "ge6": 1.0,
+  "worst": -15.2,
+  "stops": 18,
+  "n": 98
+ },
+ "iv_over_vix": {
+  "put": 1.107,
+  "call": 0.82,
+  "atm": 0.905
+ },
+ "stack_k0.5": {
+  "pre_tax": 23.3,
+  "option_contribution_pre_tax": 2.49,
+  "option_contribution_after_tax": 1.71,
+  "maxdd": -29.0
+ },
+ "stack_k1.0": {
+  "pre_tax": 22.9,
+  "option_contribution_pre_tax": 4.59,
+  "option_contribution_after_tax": 3.16,
+  "maxdd": -29.1
+ },
+ "arth_core_nse_pre_tax": 23.1
+}

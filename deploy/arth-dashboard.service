@@ -1,0 +1,12 @@
+[Unit]
+Description=Arth dashboard on 127.0.0.1:8080 (reach it through an SSH tunnel)
+After=network.target
+
+[Service]
+User=arth
+WorkingDirectory=/opt/arth/app/reports
+ExecStart=/opt/arth/venv/bin/python -m http.server 8080 --bind 127.0.0.1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

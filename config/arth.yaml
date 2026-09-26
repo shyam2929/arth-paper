@@ -1,0 +1,65 @@
+# Arth configuration. Every strategy parameter lives here.
+# Changes merge only in the quarterly change window (first week of Jan/Apr/Jul/Oct) with a
+# pre-registration file in research/prereg/ (see the plan, "Operator rules").
+version: 1.0
+dial: max             # defensive | core | aggressive | max  (chosen 24 Sep 2026; see research/results/SETTINGS.md)
+
+dials:
+  defensive: {top_n: 25, overlay: true}
+  core:      {top_n: 15, overlay: true}
+  aggressive: {top_n: 15, overlay: false}
+  # max: best worse-half result of the 20-setting search on survivorship-free data (12-1 score, liquid 1,000)
+  max:       {top_n: 15, overlay: false, scorer: "121", universe_size: 1000, min_tv: 20000000}
+
+universe:
+  size: 500                 # most liquid names by 126-day median traded value
+  min_price: 30.0           # rupees, at the signal date
+  min_history: 260          # sessions
+  series: [EQ, BE]
+
+signal:
+  scorer: ensemble          # rank(NMS) + rank(12-1 / vol)
+  vol_window: 252
+  buffer_mult: 2.0          # keep a holding while rank <= buffer_mult * top_n
+  band: 0.25                # skip resizes smaller than 25% of target weight
+
+overlay:
+  index: Nifty_500
+  ma_days: 200
+  risk_off_exposure: 0.5
+
+execution:
+  rebalance: first_session_of_month
+  window_start: "14:45"
+  window_end: "15:25"
+  slippage_bps_backtest: 15
+  limit_through_ltp_pct: 0.3
+  reprice_every_min: 3
+  max_reprices_per_order: 5
+
+risk:
+  max_order_pct_equity: 0.10
+  max_order_vs_target: 1.10
+  price_collar_pct: 0.03
+  max_quote_age_s: 60
+  max_pct_of_median_tv: 0.05
+  max_orders_per_sec: 5
+  max_new_orders_per_day: 60
+  relative_breaker: {equity_drop: 0.07, market_drop_below: 0.02}
+  drawdown_ladder: {review: -0.30, cut_to_half: -0.40}
+  allowed_products: [D]
+
+cash:
+  sweep_etf: LIQUIDCASE
+  min_move: 50000
+
+benchmark:
+  fund: "Nifty Midcap150 Momentum 50 index fund"
+  kill_rule: {window_months: 36, max_trail_pp: 8.0, basis: pre_tax, check_month: 1}
+
+tax:
+  stcg: 0.20
+  ltcg: 0.125
+  ltcg_exempt: 125000
+  cess: 0.04
+  lt_days: 365

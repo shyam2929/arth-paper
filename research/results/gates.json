@@ -1,0 +1,131 @@
+{
+ "gate1": {
+  "common_names": 2372,
+  "stock_days": 5707032,
+  "pct_days_diff_gt_0_5pct": 0.37,
+  "pct_names_total_return_within_2pct": 84.6,
+  "entities": 3393,
+  "delisted_before_end": 797,
+  "adjust_events": 687,
+  "ca_rejected": 17
+ },
+ "core_upstox": {
+  "CAGR": 23.5,
+  "Vol": 21.5,
+  "MaxDD": -29.9,
+  "Sharpe": 0.83,
+  "Calmar": 0.78,
+  "mo_mean": 2.01,
+  "mo_median": 1.65,
+  "mo_ge6": 29.1,
+  "mo_neg": 38.8,
+  "mo_worst": -17.6,
+  "mo_best": 17.6,
+  "fee_pct": 0.71,
+  "turn": 2.6,
+  "trades": 982.0,
+  "mcalls": 0.0,
+  "hold_med_d": 122.0,
+  "noov_CAGR": 29.5,
+  "noov_MaxDD": -43.1
+ },
+ "core_nse": {
+  "CAGR": 23.1,
+  "Vol": 21.5,
+  "MaxDD": -34.7,
+  "Sharpe": 0.81,
+  "Calmar": 0.67,
+  "mo_mean": 2.01,
+  "mo_median": 1.91,
+  "mo_ge6": 27.2,
+  "mo_neg": 37.9,
+  "mo_worst": -18.8,
+  "mo_best": 17.4,
+  "fee_pct": 0.73,
+  "turn": 2.6,
+  "trades": 995.0,
+  "mcalls": 0.0,
+  "hold_med_d": 120.0,
+  "noov_CAGR": 28.5,
+  "noov_MaxDD": -48.5
+ },
+ "core_nse_h50": {
+  "CAGR": 23.3,
+  "Vol": 21.5,
+  "MaxDD": -34.7,
+  "Sharpe": 0.82,
+  "Calmar": 0.67,
+  "mo_mean": 2.02,
+  "mo_median": 1.91,
+  "mo_ge6": 27.2,
+  "mo_neg": 37.9,
+  "mo_worst": -18.8,
+  "mo_best": 17.4,
+  "fee_pct": 0.72,
+  "turn": 2.6,
+  "trades": 993.0,
+  "mcalls": 0.0,
+  "hold_med_d": 120.0,
+  "noov_CAGR": 28.7,
+  "noov_MaxDD": -48.5
+ },
+ "replica_upstox": {
+  "replica": 19.3,
+  "index": 12.8,
+  "corr": 0.9181719002094186
+ },
+ "replica_nse": {
+  "replica": 17.5,
+  "index": 12.8,
+  "corr": 0.924728734363794
+ },
+ "aftertax_nse": {
+  "full": {
+   "pre_tax": 23.17,
+   "after_tax": 19.6,
+   "fund_pre": 17.12,
+   "fund_after": 15.81,
+   "lead_after_tax": 3.8
+  },
+  "half_2022": {
+   "pre_tax": 13.64,
+   "after_tax": 11.34,
+   "fund_pre": 15.02,
+   "fund_after": 13.66,
+   "lead_after_tax": -2.32
+  }
+ },
+ "bootstrap_p_trail_fund_3y_pretax": 28.5,
+ "aftertax_nse_h50": {
+  "full": {
+   "pre_tax": 23.3,
+   "after_tax": 19.71,
+   "fund_pre": 17.12,
+   "fund_after": 15.81,
+   "lead_after_tax": 3.91
+  },
+  "half_2022": {
+   "pre_tax": 13.93,
+   "after_tax": 11.59,
+   "fund_pre": 15.02,
+   "fund_after": 13.66,
+   "lead_after_tax": -2.07
+  }
+ },
+ "aftertax_upstox": {
+  "full": {
+   "pre_tax": 23.46,
+   "after_tax": 19.87,
+   "fund_pre": 17.12,
+   "fund_after": 15.81,
+   "lead_after_tax": 4.06
+  },
+  "half_2022": {
+   "pre_tax": 15.58,
+   "after_tax": 12.96,
+   "fund_pre": 15.02,
+   "fund_after": 13.66,
+   "lead_after_tax": -0.7
+  }
+ }
+}
