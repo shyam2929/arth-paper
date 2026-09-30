@@ -2,10 +2,15 @@
 # the repository (state/ledger.json) and publishes the dashboard to GitHub Pages. No secrets are used.
 name: Arth paper desk nightly
 
+# GitHub often starts scheduled runs hours late (2.5 to 6 hours in Sep 2026), so there are four slots. NSE's files
+# are normally out by about 16:30 IST. A run before they are out processes up to the previous session; re-running is
+# harmless (idempotent).
 on:
   schedule:
-    - cron: "40 15 * * 1-6"   # 21:10 IST, Mon-Sat (NSE files are normally out by 20:30)
-    - cron: "40 17 * * 1-6"   # 23:10 IST retry; re-running is harmless (idempotent)
+    - cron: "40 11 * * 1-5"   # 17:10 IST, Mon-Fri
+    - cron: "40 13 * * 1-5"   # 19:10 IST, Mon-Fri
+    - cron: "40 15 * * 1-6"   # 21:10 IST, Mon-Sat
+    - cron: "40 17 * * 1-6"   # 23:10 IST, Mon-Sat
   workflow_dispatch:
 
 permissions:
@@ -26,6 +31,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # the newest ledger, even if an earlier queued run has just saved one
 
       - name: First run only - unpack the uploaded code
         run: |
