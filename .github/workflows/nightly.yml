@@ -2,15 +2,15 @@
 # the repository (state/ledger.json) and publishes the dashboard to GitHub Pages. No secrets are used.
 name: Arth paper desk nightly
 
-# GitHub often starts scheduled runs hours late (2.5 to 6 hours in Sep 2026), so there are four slots. NSE's files
-# are normally out by about 16:30 IST. A run before they are out processes up to the previous session; re-running is
-# harmless (idempotent).
+# Since late Aug 2026 GitHub starts scheduled runs 4 to 6 hours late and drops some entirely
+# (github.com/orgs/community/discussions/207346), so there is a slot every hour. NSE's files are normally out by about
+# 16:30 IST; whichever run starts first after that processes the day. Earlier runs process up to the previous session.
+# Re-running is harmless (idempotent), and a run that finds nothing new does not commit.
+# For on-the-minute updates, an outside scheduler can call this workflow's workflow_dispatch API (see README).
 on:
   schedule:
-    - cron: "40 11 * * 1-5"   # 17:10 IST, Mon-Fri
-    - cron: "40 13 * * 1-5"   # 19:10 IST, Mon-Fri
-    - cron: "40 15 * * 1-6"   # 21:10 IST, Mon-Sat
-    - cron: "40 17 * * 1-6"   # 23:10 IST, Mon-Sat
+    - cron: "40 5-17 * * 1-5"   # hourly 11:10-23:10 IST, Mon-Fri
+    - cron: "40 5,11,17 * * 6"  # Saturday catch-up
   workflow_dispatch:
 
 permissions:
@@ -64,7 +64,7 @@ jobs:
       - name: Fetch NSE data (resumable, up to 4 passes)
         run: |
           for i in 1 2 3 4; do
-            python -m arth.ops.cloud fetch > fetch.log 2>&1 || true
+            python -m arth.ops.cloud fetch --days 700 > fetch.log 2>&1 || true   # 700 days: full 200-day lines on the analyser charts
             cat fetch.log
             if tail -1 fetch.log | grep -q '^FETCH_OK'; then break; fi
             sleep 30
@@ -75,15 +75,26 @@ jobs:
           python -m arth.ops.cloud nightly --ledger state/ledger.json --out out --full --runner "GitHub Actions nightly" | tee run.log
           tail -1 run.log | grep -q '^RUN_OK'
           cp out/state/ledger.json state/ledger.json
-          mkdir -p site && cp out/index.html site/index.html && cp out/state/ledger.json site/ledger.json
+          rm -rf site && mkdir -p site && cp -r out/. site/ && cp out/state/ledger.json site/ledger.json   # dashboard, analyser pages and data
           cat out/summary.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save the ledger
         run: |
           git config user.name "arth-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/ledger.json
-          if ! git diff --cached --quiet; then
+          # commit only when the book changed, not when just the run time stamps did
+          if python - <<'PY'
+          import json, subprocess, sys
+          old = subprocess.run(["git", "show", "HEAD:state/ledger.json"], capture_output=True, text=True).stdout
+          stamp = {"last_run_utc", "code_run", "runner", "run_status", "run_note"}
+          core = lambda d: {t: ([r for r in rows if r.get("key") not in stamp] if t == "meta" else rows)
+                            for t, rows in d["tables"].items()}
+          sys.exit(0 if old and core(json.loads(old)) == core(json.load(open("state/ledger.json"))) else 1)
+          PY
+          then
+            echo "No new session: ledger not committed (the page still redeploys with a fresh time)"
+          else
+            git add state/ledger.json
             git commit -qm "Paper ledger $(TZ=Asia/Kolkata date +%F)"
             git push
           fi
