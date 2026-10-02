@@ -97,7 +97,7 @@ def summary(db: Path) -> str:
     cap = float(meta["capital"]); last = days.iloc[-1]
     peak = days.equity.cummax().iloc[-1]
     txt = (f"Arth paper {days.index[-1]:%d %b %Y}: equity {_inr(last.equity)} ({_pct(last.equity / cap - 1)} since "
-           f"{_d(meta['start'], '%d %b')}), fund {_pct(last.fund / cap - 1)}, drawdown {_pct(last.equity / peak - 1)}, "
+           f"{_d(meta['start'], '%d %b')}), momentum index {_pct(last.fund / cap - 1)}, drawdown {_pct(last.equity / peak - 1)}, "
            f"{int(last.positions)} holdings.")
     today_fills = fills[fills.date == days.index[-1].date().isoformat()]
     if len(today_fills):
@@ -137,7 +137,7 @@ def _svg_chart(days: pd.DataFrame, cap: float) -> str:
             f"<polyline points='{pb}' class='fund'/><polyline points='{pa}' class='arth'/>"
             f"<circle cx='{X(n - 1):.1f}' cy='{Y(a.iloc[-1]):.1f}' r='3.5' class='dot'/>"
             f"<text x='{w - padr + 8}' y='{ya + 4:.1f}' class='lab arthl'>Arth {_pct(a.iloc[-1] - 1)}</text>"
-            f"<text x='{w - padr + 8}' y='{yb + 4:.1f}' class='lab fundl'>Fund {_pct(b.iloc[-1] - 1)}</text>"
+            f"<text x='{w - padr + 8}' y='{yb + 4:.1f}' class='lab fundl'>Index {_pct(b.iloc[-1] - 1)}</text>"
             f"<text x='{padl}' y='{h - 8}' class='tick'>{days.index[0]:%d %b %Y}</text>"
             f"<text x='{w - padr}' y='{h - 8}' class='tick' text-anchor='end'>{days.index[-1]:%d %b %Y}</text></svg>")
 
@@ -173,7 +173,7 @@ h2{font-size:13px;font-weight:600;margin:0 0 10px;text-transform:uppercase;lette
 .ks{font-size:12px;color:var(--muted)}
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:14px 16px}
 .scroll{overflow-x:auto}
-.cols{display:grid;grid-template-columns:1fr;gap:18px}
+.cols{display:grid;grid-template-columns:1fr;gap:18px}@media (max-width:899px){.cols>*{min-width:0}}
 @media (min-width:900px){.cols{grid-template-columns:1.25fr 1fr}.cols.even{grid-template-columns:1fr 1fr}}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}
 th,td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;white-space:nowrap}
@@ -192,12 +192,49 @@ svg{width:100%;height:auto;display:block}.grid{stroke:var(--rule);stroke-width:1
 ul.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
 ul.log li{display:grid;grid-template-columns:92px 1fr;gap:10px}ul.log .lv-warn{color:var(--warn)}ul.log .lv-error{color:var(--bad)}
 .note{font-size:12.5px;color:var(--muted);max-width:75ch}
+.nav{display:flex;gap:6px;flex-wrap:wrap}
+.nav a{font-size:13px;padding:4px 12px;border-radius:999px;text-decoration:none;color:var(--ink);background:var(--chip)}
+.nav a[aria-current]{background:var(--ink);color:var(--panel)}
+ol.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;font-size:14.5px;line-height:1.5;max-width:90ch}ol.steps b{font-weight:600}
 p{margin:0}
 """
 
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
          '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family='
          'IBM+Plex+Sans+Condensed:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">')
+
+INDEX_NAME = "Nifty Midcap150 Momentum 50"
+
+
+def how_picked(params: dict, cap: float) -> str:
+    """Short plain-language selection rules, filled from the ledger's own parameters so they cannot drift."""
+    n = int(params.get("top_n", 15)); keep = int(round(float(params.get("buffer_mult", 2.0)) * n))
+    uni = _group_in(int(params.get("universe_size", 1000))); tv = float(params.get("min_tv", 0)) / 1e7
+    band = float(params.get("band", 0.25)) * 100; minpx = float(params.get("min_price", 30)); hist = int(params.get("min_history", 260))
+    score = ("its return from 12 months ago to 1 month ago, divided by its volatility over the past year"
+             if str(params.get("scorer")) == "121" else "a blend of 6- and 12-month risk-adjusted returns")
+    overlay = (" When the index is below its 200-day average, only half the money is invested." if params.get("overlay")
+               else " There is no market-timing switch: it stays fully invested.")
+    steps = [
+        ("Universe", f"Every NSE share priced at ₹{minpx:.0f} or more, listed for {hist}+ sessions"
+                     + (f" and trading a median ₹{tv:.0f} crore or more a day over the last six months" if tv else "")
+                     + f". The {uni} most traded of these make the list."),
+        ("Score", f"Each stock is scored on {score}. Skipping the latest month avoids its short-term reversals; "
+                  "dividing by volatility favours steady climbers over wild ones. Prices are adjusted for splits and bonuses."),
+        ("Pick", f"The {n} highest scores, in equal amounts (about {_inr(cap / n)} each at the start)."),
+        ("Rebalance", f"On the first trading day of each month, at the closing price, using the previous day's ranking. "
+                      f"A holding stays while it ranks in the top {keep}; a new name enters only when one drops out. "
+                      f"Amounts are reset only if a position is more than {band:.0f}% off its target." + overlay),
+        ("Nothing else", "No stop-losses, profit targets, news, tips or mid-month trades. "
+                         "A stock leaves only at a monthly rebalance."),
+    ]
+    lis = "".join(f"<li><b>{t}.</b> {html.escape(d)}</li>" for t, d in steps)
+    return ("<section class='panel'><h2>How stocks are picked</h2>"
+            f"<ol class='steps'>{lis}</ol>"
+            "<p class='note' style='margin-top:10px'>Why it can work: stocks that have risen steadily over the past year "
+            "tend to keep beating the market for several more months (the momentum effect, documented in India and abroad). "
+            "It fails when market leadership flips suddenly.</p></section>")
+
 
 STALE_JS = """<script>
 (function(){var el=document.getElementById('status');if(!el)return;var g=Number(el.getAttribute('data-generated'));
@@ -272,7 +309,7 @@ def write(db: Path, panel: Path, out_dir: Path | None = None, fragment: bool = F
         m = pd.DataFrame({"Arth": days.equity, "Fund": days.fund}).resample("ME").last()
         first = pd.DataFrame({"Arth": [cap], "Fund": [cap]}, index=[days.index[0] - pd.Timedelta(days=1)])
         m = pd.concat([first, m]).pct_change().dropna()
-        monthly = ("<div class='scroll'><table><thead><tr><th>Month</th><th class='n'>Arth</th><th class='n'>Fund</th>"
+        monthly = ("<div class='scroll'><table><thead><tr><th>Month</th><th class='n'>Arth</th><th class='n'>Index</th>"
                    "<th class='n'>Gap</th></tr></thead><tbody>" + "".join(
                        f"<tr><td>{i:%b %Y}</td><td class='n {'pos' if r.Arth >= 0 else 'neg'}'>{_pct(r.Arth)}</td>"
                        f"<td class='n'>{_pct(r.Fund)}</td><td class='n {'pos' if r.Arth >= r.Fund else 'neg'}'>{_pct(r.Arth - r.Fund)}</td></tr>"
@@ -301,8 +338,8 @@ def write(db: Path, panel: Path, out_dir: Path | None = None, fragment: bool = F
         lead = (last.equity - last.fund) / cap
         kpis = (k("Equity", _inr(last.equity), f"{_pct(last.equity / cap - 1)} since {_d(meta['start'], '%d %b %Y')}",
                   "pos" if last.equity >= cap else "neg")
-                + k("Same money in the fund", _inr(last.fund), _pct(last.fund / cap - 1))
-                + k("Lead over fund", _pct(lead), "rupee gap ÷ capital", "pos" if lead >= 0 else "neg")
+                + k("Same money in the index", _inr(last.fund), f"{_pct(last.fund / cap - 1)} · {INDEX_NAME}")
+                + k("Lead over the index", _pct(lead), "rupee gap ÷ capital", "pos" if lead >= 0 else "neg")
                 + k("This month", _pct(last.equity / base_m - 1), f"{days.index[-1]:%B} so far")
                 + k("Drawdown", _pct(last.equity / peak - 1), f"from peak {_inr(peak)}")
                 + k("Cash", _inr(last.cash), f"{last.cash / last.equity * 100:.1f}% · {int(last.positions)} holdings"))
@@ -334,16 +371,21 @@ def write(db: Path, panel: Path, out_dir: Path | None = None, fragment: bool = F
              f"trend overlay {'on' if params.get('overlay') else 'off'}", "monthly, first session",
              f"capital {_inr(cap)}"]
     chips_html = "".join(f"<span class='chip'>{c}</span>" for c in chips if c)
+    how_html = how_picked(params, cap)
     code = days.code.iloc[-1] if len(days) else meta.get("code_at_init", "")
     runner = meta.get("runner", "server")
     gen_ist = now.astimezone(IST)
 
+    nav = "" if fragment else ('<nav class="nav" aria-label="Sections"><a href="./" aria-current="page">Paper desk</a>'
+                               '<a href="analyse.html">Analyse a stock</a></nav>')
     body = f"""<div class="wrap">
 <header class="top"><h1>Arth <span>paper desk</span></h1>
 <span id="status" class="pill {status[0]}" data-generated="{gen_ms}">{html.escape(status[1])}</span></header>
+{nav}
 <div class="chips">{chips_html}</div>
 <section class="kpis">{kpis}</section>
-<section class="panel"><h2>Equity against the fund</h2>{_svg_chart(days, cap)}</section>
+<section class="panel"><h2>Equity against the {INDEX_NAME} index</h2>{_svg_chart(days, cap)}</section>
+{how_html}
 <div class="cols">
 <section class="panel"><h2>Holdings</h2>{holdings}</section>
 {('<section class="panel">' + plan_html + '</section>') if plan_html else '<section class="panel"><h2>Next rebalance</h2><div class="empty"><strong>' + (_d(nxt) if nxt else 'First session of next month') + '</strong><span>The target list appears the evening before.</span></div></section>'}
@@ -355,8 +397,8 @@ def write(db: Path, panel: Path, out_dir: Path | None = None, fragment: bool = F
 </div>
 <section class="panel"><h2>Log</h2><ul class="log">{ev or '<li><span></span><span class="muted">Nothing yet.</span></li>'}</ul></section>
 <p class="note">Paper fills at NSE's official closing price ± 0.15%, with Upstox delivery charges (brokerage, STT 0.1% each side,
-exchange, stamp, DP, GST). Fund = the same capital put into the Nifty Midcap150 Momentum 50 index on the start date (price index,
-no costs). Signals use the previous session's close only. Updated {gen_ist:%a %d %b %Y, %H:%M} IST by the {html.escape(runner)} run ·
+exchange, stamp, DP, GST). Index = the same capital put into the Nifty Midcap150 Momentum 50 index at the close on the start date (price index,
+no costs or dividends): what a momentum index fund would have done. Signals use the previous session's close only. Updated {gen_ist:%a %d %b %Y, %H:%M} IST by the {html.escape(runner)} run ·
 code {html.escape(str(code))}.</p>
 </div>"""
     head = f"<title>Arth paper desk</title>\n{FONTS}\n<style>{CSS}</style>\n"
