@@ -184,6 +184,14 @@ def nightly(ledger: Path, out: Path, full: bool = False, runner: str = "Claude c
         if note:
             con = paper.connect(db); paper.log(con, through, "info", note); con.commit(); con.close()
         report.write(db, panel, out_dir=out, fragment=not full)
+        if full:                                            # the static site also gets the stock analyser
+            try:
+                from arth.ops import analyser
+                a = analyser.build(panel, ROOT / "data/sel/cm", out, db=db, raw_dir=RAW)
+                print(f"analyser: {a['stocks']} stocks to {a['date']}")
+            except Exception:                               # never let the analyser break the desk run
+                traceback.print_exc()
+                print("analyser: failed; the desk run is unaffected")
         new = export_ledger(db, out / "state/ledger.json")
         old = json.loads(Path(ledger).read_text())
         for t in ("days", "fills"):                         # a ledger only ever grows
