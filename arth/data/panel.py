@@ -11,9 +11,14 @@ Adjustment. On an ex-date NSE sets the previous close to the adjusted value, so
 captures splits, bonuses, rights and demerger adjustments. Ratios within +/- `tol` (rounding, ordinary
 dividends are not adjusted by NSE) are ignored. Back-adjusted close: adj_t = close_t * prod_{s>t} f_s.
 
+Demergers. NSE lists only the word DEMERGER. On the ex-date NSE runs a special pre-open session that
+discovers the parent's price without the demerged business, so the factor is ex_open / close_{t-1}. It
+adjusts the price history used for signals (C) but is kept out of FAC, because a demerger does not change
+the parent's share count: the paper ledger books the resulting company's shares instead (DM table).
+
 Output (pickle, same shape as the research engine expects):
     {'C': adjusted close (dates x entity), 'V': turnover / adjusted close, 'RAW': unadjusted close,
-     'TURN': turnover in rupees, 'META': entity table}
+     'TURN': turnover in rupees, 'FAC': split/bonus factors, 'DM': demergers applied, 'META': entity table}
 """
 from __future__ import annotations
 import glob
@@ -34,7 +39,7 @@ def load_raw(raw_dir: str = "data/raw/cm") -> pd.DataFrame:
     df = df[df["isin"].astype(str).str.startswith("INE")]                  # listed equity only (no ETFs, bonds)
     df["srank"] = df.series.map(SERIES_RANK)
     df = df.sort_values(["date", "symbol", "srank"]).drop_duplicates(["date", "symbol"], keep="first")
-    for c in ("close", "prev_close", "turnover", "volume"):
+    for c in ("open", "close", "prev_close", "turnover", "volume"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df.reset_index(drop=True)
 
@@ -63,7 +68,7 @@ def link_entities(df: pd.DataFrame, max_gap: int = 30) -> pd.DataFrame:
 
 
 def adjust(df: pd.DataFrame, ca: pd.DataFrame | None = None, tol: float = 0.02,
-           udiff_from: str = "2024-07-08") -> pd.DataFrame:
+           udiff_from: str = "2024-07-08", dm: pd.DataFrame | None = None) -> pd.DataFrame:
     """Set a price factor on each ex-date and back-adjust.
 
     Primary source: NSE corporate-action lists (`ca`: symbol, ex, factor). A listed action is applied on the
@@ -105,9 +110,32 @@ def adjust(df: pd.DataFrame, ca: pd.DataFrame | None = None, tol: float = 0.02,
         if abs(o / nice[j] - 1) < 0.03:
             f[i] = nice[j]; src[i] = "isin_split"
     df["factor"] = f; df["factor_src"] = src
-    rev = df.iloc[::-1]
-    cum = rev.groupby("entity").factor.cumprod()
-    after = (cum / rev.factor).iloc[::-1]
+    # Demergers: price factor only (share counts are untouched; see the module docstring)
+    dfac = pd.Series(1.0, index=df.index); dsrc = pd.Series("", index=df.index)
+    if dm is not None and len(dm):
+        rows_by = {}
+        for (sym, d), i in zip(zip(df.symbol, df.date), df.index):
+            rows_by.setdefault(sym, []).append((d, i))
+        for v in rows_by.values():
+            v.sort()
+        for sym, ex in zip(dm.symbol, dm.ex):
+            cand = [(d, i) for d, i in rows_by.get(sym, []) if d >= ex][:1]
+            if not cand or (cand[0][0] - ex).days > 20:
+                continue
+            i = cand[0][1]; pc = prev_c.get(i)
+            ref = df.at[i, "open"] if "open" in df.columns and pd.notna(df.at[i, "open"]) and df.at[i, "open"] > 0 \
+                else df.at[i, "close"]
+            r = ref / pc if pc and np.isfinite(pc) and pc > 0 else np.nan
+            if np.isfinite(r) and 0.01 < r < 0.98:          # the parent must have shed value on the ex-date
+                dfac[i] = r; dsrc[i] = "demerger"
+            else:
+                dsrc[i] = "demerger_rejected"
+    df["dfactor"] = dfac; df["dfactor_src"] = dsrc
+    df["prev_c"] = prev_c
+    tot = df.factor * df.dfactor
+    rev = tot.iloc[::-1]
+    cum = rev.groupby(df.entity.iloc[::-1]).cumprod()
+    after = (cum / rev).iloc[::-1]
     df["adj_close"] = df.close * after.reindex(df.index)
     return df
 
@@ -118,7 +146,8 @@ def build(raw_dir: str = "data/raw/cm", out: str = "data/panel_nse.pkl", idx_fro
     raw = load_raw(raw_dir)
     raw = link_entities(raw)
     ca = corp_actions.load(bc_dir)
-    raw = adjust(raw, ca)
+    dm = corp_actions.load_demergers(bc_dir)
+    raw = adjust(raw, ca, dm=dm)
     # name each entity after its latest symbol (what the broker uses today); keep suffixes on clashes
     g0 = raw.sort_values("date").groupby("entity")
     last_sym = g0.symbol.last(); last_day = g0.date.max()
@@ -133,6 +162,10 @@ def build(raw_dir: str = "data/raw/cm", out: str = "data/panel_nse.pkl", idx_fro
     TURN = raw.pivot(index="date", columns="entity", values="turnover").sort_index()
     V = TURN / C
     FAC = raw.pivot(index="date", columns="entity", values="factor").sort_index()   # ex-date factors
+    d = raw[raw.dfactor_src == "demerger"]
+    DM = pd.DataFrame({"entity": d.entity.values, "date": d.date.values, "symbol": d.symbol.values,
+                       "prev_close": d.prev_c.values, "ex_price": (d.dfactor * d.prev_c).values,
+                       "factor": d.dfactor.values})
     g = raw.groupby("entity")
     meta = pd.DataFrame({
         "first": g.date.min(), "last": g.date.max(), "n_days": g.size(),
@@ -142,7 +175,7 @@ def build(raw_dir: str = "data/raw/cm", out: str = "data/panel_nse.pkl", idx_fro
         "ca_rejected": g.factor_src.agg(lambda s: int((s == "ca_rejected").sum())),
         "isin_splits": g.factor_src.agg(lambda s: int((s == "isin_split").sum())),
         "last_close": g.close.last(), "last_series": g.series.last()})
-    panel = {"C": C, "V": V, "RAW": RAW, "TURN": TURN, "FAC": FAC, "META": meta}
+    panel = {"C": C, "V": V, "RAW": RAW, "TURN": TURN, "FAC": FAC, "DM": DM, "META": meta}
     if idx_from:
         obj = pd.read_pickle(idx_from)
         panel["IDX"] = obj["IDX"] if isinstance(obj, dict) else obj
