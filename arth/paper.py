@@ -3,7 +3,8 @@ Paper trading: the production signal and order planner, filled on paper at NSE's
 
 Why this is a faithful rehearsal: the backtest trades at the close with 0.15% slippage, so the paper broker
 does the same, using the exchange's own closing price file. Every rupee is booked in a SQLite ledger with
-FIFO tax lots, splits and bonuses applied to share counts, and a shadow ledger that puts the same capital
+FIFO tax lots, splits and bonuses applied to share counts, demerger entitlements booked as pending holdings
+until the resulting company lists (arth/data/demergers.py), and a shadow ledger that puts the same capital
 into the Midcap150 Momentum 50 index on the start date.
 
 Processing is idempotent and in date order: a missed evening is caught up next time, with identical results,
@@ -20,6 +21,7 @@ import pandas as pd
 
 from arth import config as CFG
 from arth.data import calendar as CAL
+from arth.data import demergers as DMX
 from arth.exec.orders import make_tag
 from arth.ledger import fees as F
 from arth.ledger.lots import LotBook, Lot, tax_by_year
@@ -164,6 +166,48 @@ def late_corporate_actions(con, state: dict, P: dict, last: pd.Timestamp, lookba
     return changed
 
 
+def late_demergers(con, state: dict, P: dict, last: pd.Timestamp, lookback: int = 40) -> bool:
+    """A demerger on a held name that an earlier code version (or a late NSE list) did not book: book it now
+    and restate the equity of every session since the ex-date, which was understated by the entitlement."""
+    dmt = P.get("DM")
+    if dmt is None or not len(dmt) or not state.get("pos"):
+        return False
+    sess = P["RAW"].index[P["RAW"].index <= last][-lookback:]
+    done = set(state.get("ca_done", [])); book = book_from(state); spins = list(state.get("spin", []))
+    terms = DMX.load_terms(); changed = False; d = last.date().isoformat()
+    for r in dmt[dmt.date.isin(sess)].itertuples():
+        k = DMX.key(r.symbol, r.date)
+        if r.entity not in state["pos"] or k in done:
+            continue
+        sp = DMX.book(book, state["pos"], r.entity, r.date, float(r.prev_close), float(r.ex_price),
+                      DMX.terms_for(terms, r.symbol, r.date))
+        done.add(k); changed = True
+        if not sp:
+            continue
+        spins.append(sp)
+        ex = pd.Timestamp(r.date).date().isoformat()
+        n = con.execute("UPDATE days SET equity = equity + ?, mv = mv + ?, positions = positions + 1 WHERE date >= ?",
+                        (sp["value"], sp["value"], ex)).rowcount
+        top = con.execute("SELECT MAX(equity) FROM days").fetchone()[0]
+        state["peak"] = max(float(state.get("peak", 0)), float(top or 0))
+        log(con, d, "warn", f"{r.entity}: demerger of {ex} booked late. " + _dm_text(sp)
+            + f" Equity of {n} session(s) since {ex} restated by +{sp['value']:,.0f}.")
+    if changed:
+        state["lots"] = book_to(book); state["spin"] = spins; state["ca_done"] = sorted(done)[-300:]
+    return changed
+
+
+def _dm_text(sp: dict) -> str:
+    what = f"{sp['qty']:g} {sp['symbol'] or sp['name'] or 'resulting-company'} shares" if sp["qty"] else "the resulting company's shares"
+    txt = (f"Booked {what}, est. {sp['value']:,.0f} ({sp['per_parent_share']:.2f} per {sp['parent']} share, implied by the "
+           f"ex-date price) until it lists; {sp['parent_cost_pct']:.2f}% of the cost stays with {sp['parent']}.")
+    if not sp["terms"]:
+        txt += " ALERT: terms not in config/demergers.yaml (ratio, symbol); add them so the shares are tracked to listing."
+    elif not sp["symbol"]:
+        txt += " Resulting company's NSE symbol not set in config/demergers.yaml yet."
+    return txt
+
+
 def fit_to_cash(orders, cash: float, reserve: float = 0.003):
     """A broker will not let buys exceed cash. Sale proceeds count (same-day credit); if the buys still
     don't fit, shrink every buy in proportion, keeping `reserve` of the order value for charges."""
@@ -207,6 +251,21 @@ def process_day(con, P: dict, f: S.Features, t: pd.Timestamp, prev_t: pd.Timesta
                 cash += frac * px[s_]                    # fractional entitlement paid in cash
                 ca_done.append(f"{s_}@{t.date()}")
                 log(con, d, "info", f"{s_}: corporate action factor {fct:.4f}, {old} -> {new} shares")
+    # demergers: pending entitlements that have listed become holdings; new ex-dates book an entitlement
+    spins = DMX.convert_listed(list(state.get("spin", [])), book, pos, raw, t, lambda lv, m: log(con, d, lv, m))
+    dmt = P.get("DM"); dm_today = set()
+    if dmt is not None and len(dmt):
+        terms = DMX.load_terms()
+        for r in dmt[dmt.date == t].itertuples():
+            dm_today.add(r.entity)
+            k = DMX.key(r.symbol, t)
+            if r.entity in pos and k not in ca_done:
+                sp = DMX.book(book, pos, r.entity, t, float(r.prev_close), float(r.ex_price),
+                              DMX.terms_for(terms, r.symbol, t))
+                ca_done.append(k)
+                if sp:
+                    spins.append(sp)
+                    log(con, d, "info" if sp["terms"] else "warn", f"{r.entity}: demerger. " + _dm_text(sp))
     if not first and cash_yield:
         cash += max(0.0, cash) * cash_yield * (t - prev_t).days / 365
     # rebalance on the first session of each month; the first session of the paper run also invests
@@ -214,7 +273,7 @@ def process_day(con, P: dict, f: S.Features, t: pd.Timestamp, prev_t: pd.Timesta
     n_fills = 0
     if rebalance:
         sig = prev_t                                      # signals use the previous close only
-        mv = sum(q * px[s_] for s_, q in pos.items())
+        mv = sum(q * px[s_] for s_, q in pos.items()) + DMX.pending_value(spins)
         eq0 = cash + mv                                   # equity before any order, fixed for all checks
         tv = S.targets(f, sig, list(pos), eq0, params)
         orders = fit_to_cash(plan_orders(pos, tv, px.to_dict(), params.band), cash)
@@ -249,17 +308,31 @@ def process_day(con, P: dict, f: S.Features, t: pd.Timestamp, prev_t: pd.Timesta
                         "VALUES(?,?,?,?,?,?,?,?,?,?)", (d, tag, o.symbol, o.side, o.qty, lim, value, ch, stt, o.reason))
             n_fills += 1
         log(con, d, "info", f"rebalance: {n_fills} fills, signal date {sig.date()}")
-    mv = sum(q * px[s_] for s_, q in pos.items())
+    mv = sum(q * px[s_] for s_, q in pos.items()) + DMX.pending_value(spins)
     equity = cash + mv
+    # guard: a held name that moves this much in one session with nothing on NSE's lists to explain it is
+    # almost always an unhandled corporate action (capital reduction, scheme, a list NSE has not published)
+    if not first:
+        for s_ in pos:
+            c = raw.loc[:t, s_].dropna()
+            if len(c) < 2 or c.index[-1] != t:
+                continue
+            r = float(c.iloc[-1] / c.iloc[-2])
+            explained = s_ in dm_today or (fac is not None and t in fac.index and s_ in fac.columns
+                                           and pd.notna(fac.at[t, s_]) and fac.at[t, s_] != 1.0)
+            if (r < 0.6 or r > 2.0) and not explained:
+                log(con, d, "warn", f"ALERT: {s_} closed {r - 1:+.0%} in one session with no split, bonus or demerger "
+                                    f"on NSE's lists; check for an unhandled corporate action before trusting the equity figure")
     # shadow fund: the same capital into the momentum index on the start date
     lvl = P["IDX"]["NiftyM150Momntm50"].loc[:t].ffill().iloc[-1]
     fund_units = state.get("fund_units") or capital / lvl
     fund = fund_units * lvl
     state = {"cash": cash, "pos": pos, "lots": book_to(book),
              "realised": state.get("realised", []) + [[r.date.isoformat(), r.symbol, r.qty, r.gain, r.days] for r in book.realised],
-             "fund_units": fund_units, "peak": max(state.get("peak", capital), equity), "ca_done": ca_done[-300:]}
+             "fund_units": fund_units, "peak": max(state.get("peak", capital), equity), "ca_done": ca_done[-300:],
+             "spin": spins}
     con.execute("INSERT OR REPLACE INTO days VALUES(?,?,?,?,?,?,?,?)",
-                (d, equity, cash, mv, fund, len(pos), int(rebalance), code_version()))
+                (d, equity, cash, mv, fund, len(pos) + len(spins), int(rebalance), code_version()))
     con.execute("INSERT OR REPLACE INTO state VALUES(?,?)", (d, json.dumps(state)))
     return state
 
@@ -302,6 +375,7 @@ def run(db: Path = DB, panel: Path = PANEL, until: str | None = None, params=Non
     if state:                                             # overnight repairs before new sessions
         fixed = remap_renamed(con, state, P, last)
         fixed = late_corporate_actions(con, state, P, pd.Timestamp(last)) or fixed
+        fixed = late_demergers(con, state, P, pd.Timestamp(last)) or fixed
         if fixed:
             con.execute("INSERT OR REPLACE INTO state VALUES(?,?)", (last, json.dumps(state))); con.commit()
     todo = [t for t in dates if t >= start and (last is None or t > pd.Timestamp(last))]
