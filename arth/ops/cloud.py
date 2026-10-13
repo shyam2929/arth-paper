@@ -176,6 +176,7 @@ def nightly(ledger: Path, out: Path, full: bool = False, runner: str = "Claude c
         through, note = _ready_through(st)
         restore_ledger(ledger, db)
         before = paper.load_state(paper.connect(db))[0]
+        run_ts = dt.datetime.now().isoformat(timespec="seconds")      # same clock as paper.log
         panel = build_panel(through)
         res = paper.run(db=db, panel=panel, until=through)
         _set_meta(db, {"data_through": through, "last_run_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
@@ -197,7 +198,7 @@ def nightly(ledger: Path, out: Path, full: bool = False, runner: str = "Claude c
         for t in ("days", "fills"):                         # a ledger only ever grows
             if len(new["tables"][t]) < len(old["tables"].get(t, [])):
                 raise RuntimeError(f"ledger shrank ({t}: {len(old['tables'][t])} -> {len(new['tables'][t])}); not publishing")
-        text = report.summary(db)
+        text = report.summary(db, since_ts=run_ts)
         if res["processed"]:
             text += f" Processed {', '.join(res['processed'])}."
         elif before:
