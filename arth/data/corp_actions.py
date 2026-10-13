@@ -3,8 +3,9 @@ Corporate actions from NSE's daily PR archive (Bc*.csv), turned into price-adjus
 
 Handled: face-value splits, bonuses, consolidations. A factor f on ex-date t means prices before t are
 multiplied by f to be comparable with prices from t on (split 10->2: f = 0.2; bonus 1:1: f = 0.5).
-Not handled (documented bias): rights issues (usually a few percent) and demergers (the parent's drop
-stays in the series, which understates returns for holders - a conservative error).
+Demergers are listed separately by `load_demergers` (NSE gives only the word DEMERGER, no ratio): the panel
+turns each into a price factor from the ex-date special pre-open price, and the paper ledger books the
+resulting company's shares (see arth/data/demergers.py). Not handled: rights issues (usually a few percent).
 """
 from __future__ import annotations
 import glob
@@ -40,7 +41,10 @@ def factor_from_purpose(purpose: str) -> tuple[float, str] | None:
     return (f, "+".join(kinds)) if kinds else None
 
 
-def load(bc_dir: str = "data/raw/bc") -> pd.DataFrame:
+DEMERGER = re.compile(r"DEMERG", re.I)
+
+
+def _read(bc_dir: str) -> pd.DataFrame:
     parts = []
     for f in sorted(glob.glob(f"{bc_dir}/*.parquet")):
         d = pd.read_parquet(f); d["file_date"] = Path(f).stem; parts.append(d)
@@ -50,7 +54,19 @@ def load(bc_dir: str = "data/raw/bc") -> pd.DataFrame:
     dmy = pd.to_datetime(bc.EX_DT, format="%d/%m/%Y", errors="coerce")          # older files
     dmy2 = pd.to_datetime(bc.EX_DT, format="%d-%b-%Y", errors="coerce")
     bc["ex"] = iso.fillna(dmy).fillna(dmy2)
-    bc = bc.dropna(subset=["ex"]).drop_duplicates(["SYMBOL", "ex", "PURPOSE"])
+    return bc.dropna(subset=["ex"]).drop_duplicates(["SYMBOL", "ex", "PURPOSE"])
+
+
+def load_demergers(bc_dir: str = "data/raw/bc") -> pd.DataFrame:
+    """Every demerger NSE lists (symbol, ex, purpose), one row per symbol and ex-date."""
+    bc = _read(bc_dir)
+    d = bc[bc.PURPOSE.astype(str).str.contains(DEMERGER)]
+    return (d.rename(columns={"SYMBOL": "symbol", "PURPOSE": "purpose"})[["symbol", "ex", "purpose"]]
+            .drop_duplicates(["symbol", "ex"]).reset_index(drop=True))
+
+
+def load(bc_dir: str = "data/raw/bc") -> pd.DataFrame:
+    bc = _read(bc_dir)
     rows = []
     for sym, ex, pur in zip(bc.SYMBOL, bc.ex, bc.PURPOSE):
         r = factor_from_purpose(pur)
