@@ -87,7 +87,8 @@ def next_month_start(day) -> str | None:
         d = n
 
 
-def summary(db: Path) -> str:
+def summary(db: Path, since_ts: str | None = None) -> str:
+    """One paragraph for notifications. With `since_ts`, warnings logged since then are appended."""
     meta, days, fills, state, plans, events = _load(db)
     if days.empty:
         txt = f"Arth paper: waiting for the first session ({_d(meta.get('start'))})."
@@ -104,6 +105,17 @@ def summary(db: Path) -> str:
         txt += f" Rebalanced: {len(today_fills)} orders."
     if len(plans) and str(plans.signal_date.iloc[0]) == days.index[-1].date().isoformat():
         txt += f" Next session is a rebalance; {len(plans[plans.signal_date == plans.signal_date.iloc[0]])} names on the target list."
+    for sp in state.get("spin", []):
+        what = f"{sp['qty']:g} {sp['symbol'] or sp['name'] or 'new'} shares" if sp.get("qty") else "resulting-company shares"
+        txt += (f" Awaiting listing: {what} from the {sp['parent']} demerger of {_d(sp['ex'], '%d %b')},"
+                f" counted at an estimated {_inr(sp['value'])}.")
+    if since_ts:
+        con = sqlite3.connect(db)
+        w = [m for (m,) in con.execute("SELECT msg FROM events WHERE ts >= ? AND level IN ('warn','error') ORDER BY ts, rowid",
+                                       (since_ts,)).fetchall()]
+        con.close()
+        if w:
+            txt += " WARNINGS: " + " | ".join(w)
     return txt
 
 
@@ -220,7 +232,7 @@ def how_picked(params: dict, cap: float) -> str:
                      + (f" and trading a median ₹{tv:.0f} crore or more a day over the last six months" if tv else "")
                      + f". The {uni} most traded of these make the list."),
         ("Score", f"Each stock is scored on {score}. Skipping the latest month avoids its short-term reversals; "
-                  "dividing by volatility favours steady climbers over wild ones. Prices are adjusted for splits and bonuses."),
+                  "dividing by volatility favours steady climbers over wild ones. Prices are adjusted for splits, bonuses and demergers."),
         ("Pick", f"The {n} highest scores, in equal amounts (about {_inr(cap / n)} each at the start)."),
         ("Rebalance", f"On the first trading day of each month, at the closing price, using the previous day's ranking. "
                       f"A holding stays while it ranks in the top {keep}; a new name enters only when one drops out. "
@@ -263,6 +275,17 @@ def write(db: Path, panel: Path, out_dir: Path | None = None, fragment: bool = F
         rows.append(f"<tr><td>{html.escape(s)}</td><td class='n'>{_group_in(q)}</td><td class='n'>{_px(cost)}</td>"
                     f"<td class='n'>{_px(raw[s])}</td><td class='n'>{_inr(v)}</td><td class='n'>{v / eq * 100:.1f}%</td>"
                     f"<td class='n {'pos' if raw[s] >= cost else 'neg'}'>{_pct(raw[s] / cost - 1)}</td></tr>")
+    for sp in state.get("spin", []):
+        q = sp.get("qty")
+        label = sp.get("symbol") or sp.get("name") or "New shares"
+        v = float(sp["value"]); c = float(sp["cost"])
+        rows.append(f"<tr><td>{html.escape(str(label))} <span class='tag new'>awaiting listing</span>"
+                    f"<div class='muted' style='font-size:12px'>from the {html.escape(sp['parent'])} demerger, {_d(sp['ex'], '%d %b')}"
+                    f" · value estimated from the ex-date price</div></td>"
+                    f"<td class='n'>{_group_in(int(round(q))) if q else '–'}</td><td class='n'>{_px(c / q) if q else '–'}</td>"
+                    f"<td class='n muted'>{(_px(v / q) + ' est.') if q else 'est.'}</td><td class='n'>{_inr(v)}</td>"
+                    f"<td class='n'>{v / eq * 100:.1f}%</td>"
+                    f"<td class='n {'pos' if v >= c else 'neg'}'>{_pct(v / c - 1) if c else '–'}</td></tr>")
     holdings = ("<div class='scroll'><table><thead><tr><th>Stock</th><th class='n'>Shares</th><th class='n'>Avg cost</th>"
                 "<th class='n'>Last</th><th class='n'>Value</th><th class='n'>Weight</th><th class='n'>P&amp;L</th></tr></thead><tbody>"
                 + "".join(rows) + "</tbody></table></div>") if rows else \
