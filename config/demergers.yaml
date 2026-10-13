@@ -1,0 +1,17 @@
+# Terms of demergers that touched a holding. NSE's corporate-action list says only "DEMERGER", so the desk
+# handles any demerger without an entry here (value and cost split implied by the ex-date price), but the
+# resulting company's shares can only be tracked to its listing when the entry below names its symbol.
+#
+# key: PARENT@EX-DATE (the NSE symbol and ex-date as in NSE's list)
+#   name:            resulting company
+#   symbol:          its NSE symbol once listed (null while unknown; the desk keeps valuing at the implied price)
+#   ratio:           resulting-company shares per parent share
+#   parent_cost_pct: % of the original cost that stays with the parent (company's cost-apportionment notice)
+#   source:          where the terms come from
+
+BHAGYANGR@2026-10-08:
+  name: Tieramet Ltd
+  symbol: TIERAMET          # expected; confirm when NSE lists it
+  ratio: 1.0                # 1 Tieramet share (FV Rs 2) per Bhagyanagar India share (FV Rs 2)
+  parent_cost_pct: 10.64    # 89.36% of cost moves to Tieramet
+  source: company disclosures on the NCLT-sanctioned composite scheme (record date 08 Oct 2026)
